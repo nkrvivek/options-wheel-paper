@@ -4,8 +4,8 @@ from core.execution import sell_puts, sell_calls
 from core.state_manager import update_state, calculate_risk
 from config.credentials import ALPACA_API_KEY, ALPACA_SECRET_KEY, IS_PAPER
 from config.params import MAX_RISK
-from logging.strategy_logger import StrategyLogger
-from logging.logger_setup import setup_logger
+from wheel_logging.strategy_logger import StrategyLogger
+from wheel_logging.logger_setup import setup_logger
 from core.cli_args import parse_args
 
 def main():
@@ -19,7 +19,19 @@ def main():
 
     SYMBOLS_FILE = Path(__file__).parent.parent / "config" / "symbol_list.txt"
     with open(SYMBOLS_FILE, 'r') as file:
-        SYMBOLS = [line.strip() for line in file.readlines()]
+        SYMBOLS = [line.strip() for line in file.readlines() if line.strip()]
+
+    # paper-wheel prereg 2026-08-25: no new short leg on a name with earnings
+    # inside the DTE window. scripts/run_daily.py writes the exclusion file
+    # before each run; a name it could not verify is excluded, not waved in.
+    EXCLUDE_FILE = Path(__file__).parent.parent / "config" / "earnings_exclude.txt"
+    excluded = set()
+    if EXCLUDE_FILE.exists():
+        with open(EXCLUDE_FILE, 'r') as file:
+            excluded = {line.strip() for line in file.readlines() if line.strip()}
+        if excluded:
+            SYMBOLS = [s for s in SYMBOLS if s not in excluded]
+            print(f"earnings filter: excluded {sorted(excluded)}")
 
     client = BrokerClient(api_key=ALPACA_API_KEY, secret_key=ALPACA_SECRET_KEY, paper=IS_PAPER)
 
@@ -39,6 +51,11 @@ def main():
 
         for symbol, state in states.items():
             if state["type"] == "long_shares":
+                # A covered call is also a new short leg — the earnings rule
+                # applies to it the same as to a CSP.
+                if symbol in excluded:
+                    print(f"earnings filter: holding {symbol} uncovered this run")
+                    continue
                 sell_calls(client, symbol, state["price"], state["qty"], strat_logger)
 
         allowed_symbols = list(set(SYMBOLS).difference(states.keys()))

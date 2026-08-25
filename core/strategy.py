@@ -1,4 +1,15 @@
-from config.params import DELTA_MIN, DELTA_MAX, YIELD_MIN, YIELD_MAX, OPEN_INTEREST_MIN, SCORE_MIN
+from config.params import DELTA_MIN, DELTA_MAX, YIELD_MIN, YIELD_MAX, OPEN_INTEREST_MIN, SCORE_MIN, SPREAD_MAX_FRAC
+
+
+def spread_ok(contract):
+    """Spread ≤ SPREAD_MAX_FRAC of mark. A contract missing either quote fails:
+    an unpriced spread is unknown, not tight."""
+    if not contract.bid_price or not contract.ask_price:
+        return False
+    mark = (contract.bid_price + contract.ask_price) / 2
+    if mark <= 0:
+        return False
+    return (contract.ask_price - contract.bid_price) / mark <= SPREAD_MAX_FRAC
 
 def filter_underlying(client, symbols, buying_power_limit):
     """
@@ -20,8 +31,9 @@ def filter_options(options, min_strike = 0):
                           and abs(contract.delta) < DELTA_MAX
                           and (contract.bid_price / contract.strike) * (365 / (contract.dte + 1)) > YIELD_MIN
                           and (contract.bid_price / contract.strike) * (365 / (contract.dte + 1)) < YIELD_MAX
-                          and contract.oi 
+                          and contract.oi
                           and contract.oi > OPEN_INTEREST_MIN
+                          and spread_ok(contract)
                           and contract.strike >= min_strike]
     
     return filtered_contracts

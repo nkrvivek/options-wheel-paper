@@ -1,5 +1,6 @@
 import logging
 from .strategy import filter_underlying, filter_options, score_options, select_options
+from config.params import PER_NAME_CAP
 from models.contract import Contract
 import numpy as np
 
@@ -29,7 +30,12 @@ def sell_puts(client, allowed_symbols, buying_power, strat_logger = None):
         scores = score_options(put_options)
         put_options = select_options(put_options, scores)
         for p in put_options:
-            buying_power -= 100 * p.strike 
+            # paper-wheel prereg 2026-08-25: per-name collateral cap. Skip the
+            # name, keep scanning — a too-big strike is not exhaustion.
+            if 100 * p.strike > PER_NAME_CAP:
+                logger.info(f"Skipping {p.symbol}: collateral {100 * p.strike:.0f} exceeds PER_NAME_CAP {PER_NAME_CAP}")
+                continue
+            buying_power -= 100 * p.strike
             if buying_power < 0:
                 break
             logger.info(f"Selling put: {p.symbol}")

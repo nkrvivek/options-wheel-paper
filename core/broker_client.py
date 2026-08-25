@@ -20,9 +20,24 @@ class OptionHistoricalDataClientSigned(UserAgentMixin, OptionHistoricalDataClien
     pass
 
 
+#: paper-wheel is a paper-only book (prereg 2026-08-25). No live-trading path
+#: exists here on purpose — same pin as ai-hedge-fund's bridge/alpaca.py.
+PAPER_HOST = "paper-api.alpaca.markets"
+
+
 class BrokerClient:
     def __init__(self, api_key, secret_key, paper=True):
+        if not paper:
+            raise RuntimeError(
+                "paper-wheel is a paper-only book; live trading is disabled on purpose"
+            )
         self.trade_client = TradingClientSigned(api_key=api_key, secret_key=secret_key, paper=paper)
+        raw = getattr(self.trade_client, "_base_url", "")
+        base_url = str(getattr(raw, "value", raw))
+        if PAPER_HOST not in base_url:
+            raise RuntimeError(
+                f"trading endpoint {base_url!r} is not the pinned paper host {PAPER_HOST!r}"
+            )
         self.stock_client = StockHistoricalDataClientSigned(api_key=api_key, secret_key=secret_key)
         self.option_client = OptionHistoricalDataClientSigned(api_key=api_key, secret_key=secret_key)
 
