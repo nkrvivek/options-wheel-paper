@@ -1,0 +1,23 @@
+{
+ "date": "2026-08-26",
+ "status": "GREEN",
+ "run_ok": true,
+ "equity": 100000.0,
+ "cash": 100000.0,
+ "positions": [],
+ "breaches": [],
+ "excluded": [
+  "NVDA"
+ ],
+ "exclusion_detail": "NVDA: earnings 2026-08-26 inside 45d window",
+ "universe": [
+  "KMI",
+  "KVUE",
+  "MSFT",
+  "META",
+  "AMZN",
+  "GOOGL",
+  "SCHW",
+  "NVDA"
+ ]
+}
