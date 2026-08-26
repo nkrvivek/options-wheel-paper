@@ -124,9 +124,15 @@ def send_digest(subject, body):
         print("email skip: RESEND_* not configured")
         return
     payload = json.dumps({"from": frm, "to": [to], "subject": subject, "text": body}).encode()
+    # Cloudflare fronts api.resend.com and answers the default Python-urllib
+    # UA with 403, same as the earnings sheet above — the request names itself.
     req = urllib.request.Request(
         "https://api.resend.com/emails", data=payload,
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "User-Agent": "paper-wheel/1.0",
+        },
     )
     try:
         urllib.request.urlopen(req, timeout=30)
