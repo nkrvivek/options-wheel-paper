@@ -88,13 +88,32 @@ def check_breaches(account, positions):
     """The kill criterion: any naked or non-cash-secured short leg.
 
     Fail-closed — a leg that cannot be parsed is a breach, never a skip.
+
+    A short put PAIRED with a long put (same underlying + expiry, lower
+    strike) is defined-risk: it needs (short - long strike) * 100 cash, not
+    the full CSP strike (spy-spread sleeve, DJ-20260827-01). Anything that
+    cannot pair — different expiry, higher-strike long, unparseable long —
+    still demands full collateral. Conservative by default.
     """
     breaches = []
     shares = {}
+    long_puts = {}
     for p in positions:
         if str(p.get("asset_class")) == "us_equity":
             shares[p["symbol"]] = shares.get(p["symbol"], 0) + float(p["qty"])
+        elif str(p.get("asset_class")) == "us_option" and float(p["qty"]) > 0:
+            m = OCC_RE.match(p["symbol"])
+            if m and m.group(3) == "P":
+                key = (m.group(1), m.group(2))
+                long_puts.setdefault(key, []).append(
+                    [int(m.group(4)) / 1000, float(p["qty"])]
+                )
+    # Highest strike first: the tightest width pairs first, which is the
+    # actual max-loss math, not a favor to the book.
+    for legs in long_puts.values():
+        legs.sort(reverse=True)
     put_collateral = 0.0
+    spread_risk = 0.0
     for p in positions:
         if str(p.get("asset_class")) != "us_option" or float(p["qty"]) >= 0:
             continue
@@ -103,7 +122,7 @@ def check_breaches(account, positions):
         if not m:
             breaches.append(f"unparseable short option leg {p['symbol']}")
             continue
-        underlying, _, right, strike_raw = m.groups()
+        underlying, expdate, right, strike_raw = m.groups()
         strike = int(strike_raw) / 1000
         if right == "C":
             if shares.get(underlying, 0) < 100 * qty:
@@ -111,10 +130,22 @@ def check_breaches(account, positions):
                     f"naked call {p['symbol']}: {shares.get(underlying, 0):.0f} shares held, {100 * qty:.0f} needed"
                 )
         else:
-            put_collateral += strike * 100 * qty
+            unpaired = qty
+            for leg in long_puts.get((underlying, expdate), []):
+                if unpaired <= 0:
+                    break
+                if leg[0] >= strike or leg[1] <= 0:
+                    continue
+                take = min(unpaired, leg[1])
+                spread_risk += (strike - leg[0]) * 100 * take
+                leg[1] -= take
+                unpaired -= take
+            put_collateral += strike * 100 * unpaired
     cash = float(account["cash"])
-    if put_collateral > cash:
-        breaches.append(f"short puts need ${put_collateral:,.0f} collateral against ${cash:,.0f} cash")
+    if put_collateral + spread_risk > cash:
+        breaches.append(
+            f"short puts need ${put_collateral:,.0f} collateral + ${spread_risk:,.0f} defined spread risk against ${cash:,.0f} cash"
+        )
     return breaches
 
 
@@ -151,7 +182,17 @@ def main():
 
     from config.credentials import ALPACA_API_KEY, ALPACA_SECRET_KEY, IS_PAPER
     from core.broker_client import BrokerClient
+    from core.spread_sleeve import run_sleeve, digest_lines as spread_digest_lines
     client = BrokerClient(api_key=ALPACA_API_KEY, secret_key=ALPACA_SECRET_KEY, paper=IS_PAPER)
+
+    # spy-spread sleeve (DJ-20260827-01) runs before the account snapshot so
+    # state and breaches see post-trade positions. An error is a RED finding,
+    # never a silent skip.
+    try:
+        spread = run_sleeve(client, ROOT)
+    except Exception as e:
+        spread = {"status": "error", "detail": f"{e.__class__.__name__}: {e}"}
+
     acct = client.trade_client.get_account()
     account = {"equity": float(acct.equity), "cash": float(acct.cash)}
     positions = [
@@ -162,7 +203,8 @@ def main():
     breaches = check_breaches(account, positions)
 
     all_excluded = set(symbols) == excluded
-    if breaches or rc != 0:
+    spread_red = spread.get("status") == "error" or spread.get("killed")
+    if breaches or rc != 0 or spread_red:
         status = "RED"
     elif all_excluded:
         status = "YELLOW"
@@ -179,6 +221,7 @@ def main():
         "excluded": sorted(excluded),
         "exclusion_detail": exclusion_detail,
         "universe": symbols,
+        "spread": spread,
     }
     state_dir = ROOT / "state"
     state_dir.mkdir(exist_ok=True)
@@ -196,6 +239,7 @@ def main():
     if breaches:
         lines.append("BREACHES (kill criterion):")
         lines.extend(f"  {b}" for b in breaches)
+    lines.extend(spread_digest_lines(spread))
     if excluded:
         lines.append(f"earnings-excluded: {sorted(excluded)}")
         lines.append(f"  {exclusion_detail}")

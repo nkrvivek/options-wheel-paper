@@ -4,8 +4,8 @@ from alpaca.trading.client import TradingClient
 from alpaca.data.historical.option import OptionHistoricalDataClient
 from alpaca.data.historical.stock import StockHistoricalDataClient, StockLatestTradeRequest
 from alpaca.data.requests import OptionSnapshotRequest
-from alpaca.trading.requests import GetOptionContractsRequest, MarketOrderRequest
-from alpaca.trading.enums import ContractType, AssetStatus, AssetClass
+from alpaca.trading.requests import GetOptionContractsRequest, MarketOrderRequest, LimitOrderRequest, OptionLegRequest
+from alpaca.trading.enums import ContractType, AssetStatus, AssetClass, OrderClass, OrderSide, TimeInForce
 from datetime import timedelta
 from zoneinfo import ZoneInfo
 import datetime
@@ -49,6 +49,35 @@ class BrokerClient:
             symbol=symbol, qty=qty, side='sell', type='market', time_in_force='day'
         )
         self.trade_client.submit_order(req)
+
+    def submit_mleg_limit(self, legs, qty, limit_price):
+        """Multi-leg limit order (spy-spread sleeve). Negative limit = net
+        credit, positive = net debit — Alpaca's own MLEG convention.
+
+        legs: [{"symbol": occ, "side": "sell"|"buy"}], ratio 1 each.
+        """
+        leg_reqs = [
+            OptionLegRequest(
+                symbol=l["symbol"],
+                ratio_qty=1,
+                side=OrderSide.SELL if l["side"] == "sell" else OrderSide.BUY,
+            )
+            for l in legs
+        ]
+        req = LimitOrderRequest(
+            qty=qty,
+            order_class=OrderClass.MLEG,
+            legs=leg_reqs,
+            limit_price=round(limit_price, 2),
+            time_in_force=TimeInForce.DAY,
+        )
+        return self.trade_client.submit_order(req)
+
+    def get_order(self, order_id):
+        return self.trade_client.get_order_by_id(order_id)
+
+    def cancel_order(self, order_id):
+        return self.trade_client.cancel_order_by_id(order_id)
 
     def get_option_snapshot(self, symbol):
         if isinstance(symbol, str):
