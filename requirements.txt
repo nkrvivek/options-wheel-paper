@@ -1,0 +1,8 @@
+# Container runtime deps. Mirrors pyproject.toml's [project.dependencies]
+# plus boto3 for the R2 state store (core/r2_state.py).
+python-dotenv
+pandas>=1.5
+numpy>=1.23
+requests>=2.28
+alpaca-py
+boto3>=1.34

@@ -15,3 +15,8 @@ __pycache__/
 
 # VSCode settings
 .vscode/
+
+# Cloudflare worker build artifacts
+node_modules/
+.wrangler/
+package-lock.json

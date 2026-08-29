@@ -1,0 +1,14 @@
+{
+  "name": "options-wheel-paper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker + Container deployment for the paper-wheel bot.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nkrvivek/options-wheel-paper.git"
+  },
+  "devDependencies": {
+    "@cloudflare/containers": "^0.3.7",
+    "wrangler": "^4.107.0"
+  }
+}

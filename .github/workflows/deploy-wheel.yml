@@ -1,0 +1,52 @@
+name: Deploy wheel Cloudflare worker
+
+# GitHub's ONLY remaining job for this repo: build the container image and
+# deploy the Worker. It holds no schedule and executes no trades — the
+# Cloudflare Worker cron ("45 14 * * 2-6" UTC, 10:45 ET) is the single
+# scheduler, and the container is the only thing that talks to Alpaca.
+#
+# Docker is required for the container image build and the local Mac's Docker
+# install is broken, so the build happens here. Same pattern as
+# autopilot-experiment/.github/workflows/deploy-quant.yml.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency: deploy-options-wheel-paper
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Pushed to the Worker by scripts/deploy_wheel.sh, which reads them from
+      # the environment and never echoes a value.
+      CONTAINER_AUTH_TOKEN: ${{ secrets.CONTAINER_AUTH_TOKEN }}
+      WORKER_AUTH_TOKEN: ${{ secrets.WORKER_AUTH_TOKEN }}
+      ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+      ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+      TR_WORKER_URL: ${{ secrets.TR_WORKER_URL }}
+      TR_WORKER_TOKEN: ${{ secrets.TR_WORKER_TOKEN }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      RESEND_FROM: ${{ secrets.RESEND_FROM }}
+      RESEND_TO: ${{ secrets.RESEND_TO }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Install Worker dependencies
+        run: npm install --no-audit --no-fund
+      - name: Deploy worker and container
+        run: bash scripts/deploy_wheel.sh

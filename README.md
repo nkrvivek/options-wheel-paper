@@ -251,6 +251,95 @@ The core logic is defined in `core/strategy.py`.
 
 ---
 
+## Deployment — Cloudflare Worker + Container + R2
+
+This fork runs **fully on Cloudflare**. Scheduling *and* execution live there;
+GitHub's only remaining job is building the container image.
+
+```
+Cloudflare cron  "45 14 * * 2-6" UTC  (10:45 ET, Mon-Fri)
+        │
+        ▼
+Worker  options-wheel-paper            worker/index.ts
+        │  POST /run-daily  (X-Wheel-Token = CONTAINER_AUTH_TOKEN)
+        ▼
+Container  server.py  ──►  scripts/run_daily.py  ──►  Alpaca paper PA3OF0SFKF40
+        │                                        └──►  Resend daily digest
+        ▼
+R2  options-wheel-state                state/daily_state.json
+                                       state/nav_history.jsonl
+                                       state/spread_book.json
+```
+
+### Routes
+
+| Route | Auth | Purpose |
+|---|---|---|
+| `GET /` | public | Worker liveness, no container spin-up |
+| `GET /health` | public | Worker **and** container liveness |
+| `GET /status` | `X-Worker-Token` | Last run summary, R2 state snapshot |
+| `POST /run-daily` | `X-Worker-Token` | Manual run — the same path the cron uses |
+| `POST /container-restart` | `X-Worker-Token` | Recycle the container after a deploy |
+
+The public token is `WORKER_AUTH_TOKEN`; the Worker then calls the container
+with a separate `CONTAINER_AUTH_TOKEN`, so the internet-facing secret is never
+the one the container trusts.
+
+### State lives in R2, not git
+
+`core/r2_state.py` is the store: **R2 primary, local `./state/` fallback** for
+development (mirrors `state_sync.py` in the autopilot reference deployment).
+The container sets `WHEEL_REQUIRE_R2=1`, so if R2 credentials fail to resolve
+it refuses to boot rather than quietly writing state onto a container
+filesystem that evaporates on restart.
+
+Local development is unchanged: with no `R2_*` credentials, reads and writes
+land in `./state/` exactly as before. `WHEEL_LOCAL_STATE_DIR` forces the local
+path even when credentials are present.
+
+### Deploying
+
+The container image build needs Docker, and this machine's Docker install is
+broken, so the build runs in CI:
+
+```bash
+~/.local/bin/gh workflow run deploy-wheel.yml -R nkrvivek/options-wheel-paper
+```
+
+`scripts/deploy_wheel.sh` does the work (bucket bootstrap → secret push →
+`wrangler deploy` → health check) and also runs locally if Docker ever works
+again. Secret values resolve from the environment first (CI supplies them from
+GitHub repo secrets) and fall back to `.env`; they are piped into
+`wrangler secret put` and never printed.
+
+Worker secrets: `CONTAINER_AUTH_TOKEN`, `WORKER_AUTH_TOKEN`, `ALPACA_API_KEY`,
+`ALPACA_SECRET_KEY`, `TR_WORKER_URL`, `TR_WORKER_TOKEN`, `RESEND_API_KEY`,
+`RESEND_FROM`, `RESEND_TO`, `R2_ACCOUNT_ID`, `R2_ENDPOINT`,
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
+
+### Retired: the GitHub Actions schedule
+
+Until 2026-08-29 the bot ran like this:
+
+1. A separate Cloudflare Worker, `options-wheel-dispatch`, held the cron and
+   POSTed a `workflow_dispatch` to `.github/workflows/wheel-daily.yml`.
+2. A GitHub runner installed the package, ran `scripts/run_daily.py`, and
+   **committed `state/` back to the repo** — so the bot's memory was a
+   function of whether a `git push` succeeded, and GitHub sat squarely in the
+   trading execution path.
+
+All three pieces are gone: `wheel-daily.yml` and `deploy/wheel-dispatch-worker/`
+were deleted from the repo and the `options-wheel-dispatch` Worker was deleted
+from Cloudflare. Exactly **one** schedule now exists — the `[triggers]` block in
+`wrangler.toml`. There is no second scheduler and no automated `git commit` of
+state anywhere. The `state/` files still tracked in git are the frozen
+pre-cutover history; the live copies are the R2 objects.
+
+`.github/workflows/deploy-wheel.yml` is the only workflow left, it is
+`workflow_dispatch`-only, and it builds/deploys — it never trades.
+
+---
+
 ## Final Notes
 
 This is a great starting point for automating your trading, but always double-check your live trades — no system is completely hands-off.

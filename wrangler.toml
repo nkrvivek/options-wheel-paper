@@ -1,0 +1,57 @@
+# Cloudflare Worker + Container deployment for the paper-wheel bot.
+#
+# This is the ONLY scheduler for this book. It replaces the previous split
+# where a `options-wheel-dispatch` Worker fired a GitHub workflow_dispatch and
+# a GitHub runner executed the trade and committed state back to the repo.
+# GitHub now only builds the image (.github/workflows/deploy-wheel.yml).
+#
+# Worker:    options-wheel-paper
+# Container: server.py (GET /status, POST /run-daily)
+# R2 state:  options-wheel-state
+# Broker:    Alpaca PAPER account PA3OF0SFKF40
+#
+# Cloudflare numbers weekdays as 1=Sunday, 2=Monday, ..., 7=Saturday.
+# Therefore Mon-Fri is 2-6.
+
+name = "options-wheel-paper"
+main = "worker/index.ts"
+compatibility_date = "2025-09-15"
+compatibility_flags = ["nodejs_compat"]
+account_id = "3e2617436093fffd3446428537e90efd"
+
+[vars]
+# scripts/deploy_wheel.sh stamps this for each deploy and restores it after.
+GIT_COMMIT = "unknown"
+# Paper-only book. worker/index.ts hard-throws if this is anything but "true",
+# so a paper key set can never be pointed at the live Alpaca host.
+IS_PAPER = "true"
+# buildContainerEnv maps this to the Python container's R2_BUCKET.
+CONTAINER_R2_BUCKET = "options-wheel-state"
+
+[triggers]
+# 14:45 UTC Mon-Fri = 10:45 ET — the exact minute the retired
+# options-wheel-dispatch worker used, so cadence is unchanged by the migration.
+crons = ["45 14 * * 2-6"]
+
+[[r2_buckets]]
+binding = "WHEEL_STATE"
+bucket_name = "options-wheel-state"
+
+[[durable_objects.bindings]]
+name = "WHEEL_CONTAINER"
+class_name = "WheelContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WheelContainer"]
+
+[[containers]]
+class_name = "WheelContainer"
+image = "./Dockerfile"
+max_instances = 1
+instance_type = "standard-1"
+rollout_step_percentage = 100
+
+[observability]
+enabled = true
+head_sampling_rate = 1

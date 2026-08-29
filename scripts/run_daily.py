@@ -1,8 +1,14 @@
 """Daily paper-wheel run: earnings filter -> strategy -> state -> digest.
 
-Runs in CI (see .github/workflows/wheel-daily.yml). Each step degrades loudly:
-an unreachable earnings sheet blocks every new short leg rather than waving
-them through, a failed strategy run still writes state and sends a RED digest.
+Runs inside the Cloudflare container, invoked by the Worker cron via
+POST /run-daily (see server.py and worker/index.ts). It is still directly
+runnable as `python scripts/run_daily.py` for local dev, where state falls
+back to ./state/ instead of R2. Each step degrades loudly: an unreachable
+earnings sheet blocks every new short leg rather than waving them through, a
+failed strategy run still writes state and sends a RED digest.
+
+State (daily_state.json, nav_history.jsonl) lives in R2, not git — see
+core/r2_state.py for why.
 """
 import json
 import os
@@ -18,6 +24,11 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from config.params import EXPIRATION_MAX  # noqa: E402
+from core.r2_state import (  # noqa: E402
+    DAILY_STATE_KEY,
+    NAV_HISTORY_KEY,
+    get_state_store,
+)
 
 OCC_RE = re.compile(r"^([A-Z.]+)(\d{6})([CP])(\d{8})$")
 
@@ -241,11 +252,15 @@ def main():
         "universe": symbols,
         "spread": spread,
     }
-    state_dir = ROOT / "state"
-    state_dir.mkdir(exist_ok=True)
-    (state_dir / "daily_state.json").write_text(json.dumps(state, indent=1) + "\n")
-    with open(state_dir / "nav_history.jsonl", "a") as f:
-        f.write(json.dumps({"date": today, "equity": account["equity"], "cash": account["cash"]}) + "\n")
+    # R2 primary, local ./state/ fallback for dev. The pre-migration workflow
+    # wrote these two files and then `git commit`ed them; nothing commits
+    # state any more.
+    store = get_state_store()
+    store.write_json(DAILY_STATE_KEY, state)
+    store.append_jsonl(
+        NAV_HISTORY_KEY,
+        {"date": today, "equity": account["equity"], "cash": account["cash"]},
+    )
 
     lines = [
         f"paper-wheel {today} — {status}",

@@ -17,6 +17,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from config import spread_params as sp
+from core.r2_state import SPREAD_BOOK_KEY, WheelState, get_state_store
 
 BOOK_FILENAME = "spread_book.json"
 FILL_POLL_SECONDS = 90
@@ -213,10 +214,23 @@ def fetch_regime():
         return None
 
 
+def _book_store(root):
+    """R2 when credentialed, otherwise a store rooted at ``root``.
+
+    Keeping ``root`` meaningful on the local path is what lets the sleeve
+    tests point at a tmpdir (and keeps `python scripts/run_daily.py` on a
+    laptop writing ./state/spread_book.json exactly as before). In the
+    container the R2 client wins and ``root`` is unused.
+    """
+    store = get_state_store()
+    return store if store.remote else WheelState(local_root=root)
+
+
 def load_book(root):
-    path = Path(root) / "state" / BOOK_FILENAME
-    if path.exists():
-        return json.loads(path.read_text())
+    """The sleeve ledger, from R2 (or <root>/state/spread_book.json in dev)."""
+    book = _book_store(root).read_json(SPREAD_BOOK_KEY)
+    if book is not None:
+        return book
     return {
         "sleeve": "spy-spread",
         "start_notional": sp.SLEEVE_NOTIONAL,
@@ -231,9 +245,7 @@ def load_book(root):
 
 
 def save_book(root, book):
-    path = Path(root) / "state" / BOOK_FILENAME
-    path.parent.mkdir(exist_ok=True)
-    path.write_text(json.dumps(book, indent=1) + "\n")
+    _book_store(root).write_json(SPREAD_BOOK_KEY, book)
 
 
 def _quotes_for(client, symbols):
