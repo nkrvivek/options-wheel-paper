@@ -131,7 +131,7 @@ class TestSelectSpread(unittest.TestCase):
             cand(555 - sp.WIDTH, -0.10, 0.70, 0.80),
             cand(560 - sp.WIDTH, -0.12, 0.80, 0.90),
         ]
-        pick, reason = ss.select_spread(cands, TODAY)
+        pick, reason, _rejections = ss.select_spread(cands, TODAY)
         self.assertIsNotNone(pick, reason)
         self.assertEqual(pick["short"]["strike"], 560)
         self.assertEqual(pick["long"]["strike"], 560 - sp.WIDTH)
@@ -143,29 +143,33 @@ class TestSelectSpread(unittest.TestCase):
             cand(560, -0.14, 1.00, 1.10),
             cand(560 - sp.WIDTH, -0.11, 0.70, 0.80),  # credit 0.30 < 0.55
         ]
-        pick, reason = ss.select_spread(cands, TODAY)
+        pick, reason, rejections = ss.select_spread(cands, TODAY)
         self.assertIsNone(pick)
         self.assertIn("credit", reason)
+        # Full structured detail rides alongside the compact summary.
+        self.assertEqual(rejections[0]["reason"], "below_credit_floor")
+        self.assertAlmostEqual(rejections[0]["credit"], 0.30, places=6)
 
     def test_missing_delta_never_selected(self):
         cands = [
             cand(560, None, 1.40, 1.50),
             cand(560 - sp.WIDTH, -0.11, 0.80, 0.90),
         ]
-        pick, reason = ss.select_spread(cands, TODAY)
+        pick, reason, _rejections = ss.select_spread(cands, TODAY)
         self.assertIsNone(pick)
 
     def test_no_long_leg_available_refused(self):
         cands = [cand(560, -0.14, 1.40, 1.50)]
-        pick, reason = ss.select_spread(cands, TODAY)
+        pick, reason, rejections = ss.select_spread(cands, TODAY)
         self.assertIsNone(pick)
+        self.assertEqual(rejections[0]["reason"], "no_long_leg")
 
     def test_missing_quote_side_never_selected(self):
         cands = [
             cand(560, -0.14, None, 1.50),
             cand(560 - sp.WIDTH, -0.11, 0.80, 0.90),
         ]
-        pick, _ = ss.select_spread(cands, TODAY)
+        pick, _, _ = ss.select_spread(cands, TODAY)
         self.assertIsNone(pick)
 
 

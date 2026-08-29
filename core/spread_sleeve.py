@@ -64,7 +64,14 @@ def select_spread(candidates, today):
     """Pick short put by delta in the preregistered band, long WIDTH lower.
 
     candidates: [{symbol, strike, expiry, delta, bid, ask}] (puts only).
-    Returns ({short, long, credit, expiry}, reason) or (None, reason).
+    Returns (pick, reason, rejections): pick is {short, long, credit, expiry}
+    or None. rejections is one STRUCTURED record per delta-band short that
+    could not form a spread — {"symbol", "reason": "below_credit_floor" |
+    "no_long_leg", "credit"?}. Full rejection detail persists in
+    state/daily_state.json (via _try_entry); the digest only carries
+    rejection_summary() + the top nearest_misses() (2026-08-29 template fix
+    — the old "; ".join of every rejection dumped ~30 candidates inline
+    into the email).
     """
     by_key = {}
     for c in candidates:
@@ -78,21 +85,56 @@ def select_spread(candidates, today):
         and sp.SHORT_DELTA_MIN <= abs(c["delta"]) <= sp.SHORT_DELTA_MAX
     ]
     if not shorts:
-        return None, f"no short candidate with delta in [{sp.SHORT_DELTA_MIN}, {sp.SHORT_DELTA_MAX}] and a two-sided quote"
+        return None, f"no short candidate with delta in [{sp.SHORT_DELTA_MIN}, {sp.SHORT_DELTA_MAX}] and a two-sided quote", []
 
     shorts.sort(key=lambda c: abs(abs(c["delta"]) - sp.SHORT_DELTA_TARGET))
-    reasons = []
+    rejections = []
     for short in shorts:
         long_ = by_key.get((short["expiry"], short["strike"] - sp.WIDTH))
         if long_ is None:
-            reasons.append(f"{short['symbol']}: no quoted long {sp.WIDTH} below")
+            rejections.append({"symbol": short["symbol"], "reason": "no_long_leg"})
             continue
         credit = _mid(short) - _mid(long_)
         if credit < sp.MIN_CREDIT:
-            reasons.append(f"{short['symbol']}: credit {credit:.2f} < {sp.MIN_CREDIT} floor")
+            rejections.append({"symbol": short["symbol"],
+                               "reason": "below_credit_floor",
+                               "credit": round(credit, 4)})
             continue
-        return {"short": short, "long": long_, "credit": round(credit, 4), "expiry": short["expiry"]}, "selected"
-    return None, "; ".join(reasons)
+        return ({"short": short, "long": long_, "credit": round(credit, 4), "expiry": short["expiry"]},
+                "selected", rejections)
+    return None, rejection_summary(rejections), rejections
+
+
+def rejection_summary(rejections):
+    """Counts by rejection reason + the best near-miss, e.g.
+    '31 candidates: 27 below $0.55 credit floor (best 0.50 at <symbol>),
+    4 no quoted long leg'. Pure formatter — pinned by
+    tests/test_digest_format.py."""
+    below = [r for r in rejections
+             if r.get("reason") == "below_credit_floor"
+             and isinstance(r.get("credit"), (int, float))]
+    no_long = [r for r in rejections if r.get("reason") == "no_long_leg"]
+    parts = []
+    if below:
+        best = max(below, key=lambda r: r["credit"])
+        parts.append(
+            f"{len(below)} below ${sp.MIN_CREDIT:.2f} credit floor "
+            f"(best {best['credit']:.2f} at {best['symbol']})")
+    if no_long:
+        parts.append(f"{len(no_long)} no quoted long leg")
+    if not parts:
+        return "no rejections"
+    return f"{len(rejections)} candidates: " + ", ".join(parts)
+
+
+def nearest_misses(rejections, limit=5):
+    """Top-`limit` credit-floor rejections, best (highest) credit first —
+    the digest's short near-miss list."""
+    below = [r for r in rejections
+             if r.get("reason") == "below_credit_floor"
+             and isinstance(r.get("credit"), (int, float))]
+    below.sort(key=lambda r: r["credit"], reverse=True)
+    return below[:limit]
 
 
 def position_size(credit):
@@ -337,9 +379,14 @@ def _try_entry(client, book, today):
     result = {"regime": regime, "allowed": ok, "reason": reason}
     if not ok:
         return result
-    pick, why = select_spread(_entry_candidates(client, today), today)
+    pick, why, rejections = select_spread(_entry_candidates(client, today), today)
     if pick is None:
-        result.update({"allowed": False, "reason": f"no spread selected: {why}"})
+        # `reason` is the compact summary (digest); `rejections` is the full
+        # per-candidate detail, persisted in state/daily_state.json under
+        # spread.entry.rejections.
+        result.update({"allowed": False,
+                       "reason": f"no spread selected: {why}",
+                       "rejections": rejections})
         return result
     qty = position_size(pick["credit"])
     if qty < 1:
@@ -445,6 +492,10 @@ def digest_lines(spread):
     ]
     entry = spread.get("entry", {})
     lines.append(f"  entry: {'OPENED' if entry.get('allowed') and 'filled' in str(entry.get('order', '')) else 'no'} — {entry.get('order') or entry.get('reason', '?')}")
+    # Top-5 nearest misses max (2026-08-29 template fix) — the full
+    # rejection detail stays in state/daily_state.json, never in the email.
+    for r in nearest_misses(entry.get("rejections") or []):
+        lines.append(f"    near-miss: {r['symbol']} credit {r['credit']:.2f}")
     for note in spread.get("notes", []):
         lines.append(f"  {note}")
     if spread.get("breaches"):

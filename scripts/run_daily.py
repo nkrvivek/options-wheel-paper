@@ -12,6 +12,7 @@ import sys
 import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
@@ -19,6 +20,23 @@ sys.path.insert(0, str(ROOT))
 from config.params import EXPIRATION_MAX  # noqa: E402
 
 OCC_RE = re.compile(r"^([A-Z.]+)(\d{6})([CP])(\d{8})$")
+
+MARKET_TZ = ZoneInfo("America/New_York")
+
+
+def market_session_date(now=None):
+    """US-market session date (America/New_York), NOT the UTC date.
+
+    2026-08-29 fix: the 2026-08-28 digest went out at 5:26 PM PT stamped
+    "2026-08-29" because UTC had already rolled over; the market session was
+    still Aug 28 in New York. Subject, body, daily state, and NAV history
+    all stamp this date now (core/spread_sleeve.run_sleeve already used the
+    NY date — this brings the rest of the run in line).
+    """
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return now.astimezone(MARKET_TZ).date().isoformat()
 
 
 def load_symbols():
@@ -173,7 +191,7 @@ def send_digest(subject, body):
 
 
 def main():
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = market_session_date()
     symbols = load_symbols()
     excluded, exclusion_detail = build_earnings_exclusions(symbols)
     (ROOT / "config" / "earnings_exclude.txt").write_text("\n".join(sorted(excluded)) + "\n")
