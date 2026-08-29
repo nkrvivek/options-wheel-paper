@@ -1,5 +1,5 @@
 {
- "date": "2026-08-28",
+ "date": "2026-08-29",
  "status": "GREEN",
  "run_ok": true,
  "equity": 100000.0,
@@ -31,13 +31,13 @@
    "regime": {
     "tier": "clear",
     "label": "CLEAR",
-    "mq_age_min": 8,
+    "mq_age_min": 54,
     "vix": 14.43,
-    "detail": "mq.decision=YES (age 8min) -> base tier=clear; cri.vix=14.43 (< 28, no floor applied)",
-    "as_of": "2026-08-28T23:40:16.664Z"
+    "detail": "mq.decision=YES (age 54min) -> base tier=clear; cri.vix=14.43 (< 28, no floor applied)",
+    "as_of": "2026-08-29T00:26:03.672Z"
    },
    "allowed": false,
-   "reason": "no spread selected: SPY261002P00731000: credit 0.32 < 0.55 floor; SPY261009P00726000: credit 0.33 < 0.55 floor; SPY260930P00733000: credit 0.38 < 0.55 floor; SPY261002P00730000: credit 0.42 < 0.55 floor; SPY261009P00727000: credit 0.49 < 0.55 floor; SPY260930P00732000: credit 0.32 < 0.55 floor; SPY261009P00725000: credit 0.41 < 0.55 floor; SPY260930P00734000: credit 0.39 < 0.55 floor; SPY261002P00732000: credit 0.39 < 0.55 floor; SPY260930P00731000: credit 0.44 < 0.55 floor; SPY261009P00728000: credit 0.42 < 0.55 floor; SPY261002P00729000: credit 0.37 < 0.55 floor; SPY261009P00724000: no quoted long 5 below; SPY261009P00729000: credit 0.38 < 0.55 floor; SPY261002P00728000: credit 0.37 < 0.55 floor; SPY261002P00733000: credit 0.40 < 0.55 floor; SPY260930P00730000: credit 0.37 < 0.55 floor; SPY261009P00723000: no quoted long 5 below; SPY260930P00735000: credit 0.42 < 0.55 floor; SPY261009P00730000: credit 0.33 < 0.55 floor; SPY261002P00734000: credit 0.39 < 0.55 floor; SPY261002P00727000: credit 0.35 < 0.55 floor; SPY260930P00729000: credit 0.29 < 0.55 floor; SPY261009P00722000: no quoted long 5 below; SPY260930P00728000: credit 0.36 < 0.55 floor; SPY261002P00726000: credit 0.37 < 0.55 floor; SPY260930P00736000: credit 0.47 < 0.55 floor; SPY261009P00721000: no quoted long 5 below; SPY261002P00735000: credit 0.44 < 0.55 floor; SPY261009P00731000: credit 0.50 < 0.55 floor; SPY260930P00737000: credit 0.42 < 0.55 floor"
+   "reason": "no spread selected: SPY261002P00731000: credit 0.32 < 0.55 floor; SPY261009P00726000: credit 0.33 < 0.55 floor; SPY260930P00733000: credit 0.38 < 0.55 floor; SPY261002P00730000: credit 0.42 < 0.55 floor; SPY261009P00727000: credit 0.49 < 0.55 floor; SPY260930P00732000: credit 0.32 < 0.55 floor; SPY261009P00725000: credit 0.41 < 0.55 floor; SPY260930P00734000: credit 0.39 < 0.55 floor; SPY261002P00732000: credit 0.39 < 0.55 floor; SPY260930P00731000: credit 0.44 < 0.55 floor; SPY261009P00728000: credit 0.42 < 0.55 floor; SPY261002P00729000: credit 0.37 < 0.55 floor; SPY261009P00724000: no quoted long 5 below; SPY261009P00729000: credit 0.38 < 0.55 floor; SPY261002P00728000: credit 0.37 < 0.55 floor; SPY261002P00733000: credit 0.40 < 0.55 floor; SPY260930P00730000: credit 0.37 < 0.55 floor; SPY260930P00735000: credit 0.42 < 0.55 floor; SPY261009P00723000: no quoted long 5 below; SPY261009P00730000: credit 0.33 < 0.55 floor; SPY261002P00734000: credit 0.39 < 0.55 floor; SPY261002P00727000: credit 0.35 < 0.55 floor; SPY260930P00729000: credit 0.29 < 0.55 floor; SPY261009P00722000: no quoted long 5 below; SPY260930P00736000: credit 0.47 < 0.55 floor; SPY260930P00728000: credit 0.36 < 0.55 floor; SPY261002P00726000: credit 0.37 < 0.55 floor; SPY261009P00721000: no quoted long 5 below; SPY261002P00735000: credit 0.44 < 0.55 floor; SPY261009P00731000: credit 0.50 < 0.55 floor; SPY260930P00737000: credit 0.42 < 0.55 floor"
   },
   "exits": [],
   "notes": [],
