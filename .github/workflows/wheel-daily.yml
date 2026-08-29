@@ -1,7 +1,5 @@
 name: wheel-daily
 on:
-  schedule:
-    - cron: "45 14 * * 1-5"   # 10:45 ET — post-open, settled prices
   workflow_dispatch: {}
 permissions:
   contents: write
