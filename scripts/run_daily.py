@@ -260,6 +260,7 @@ def main():
     store.append_jsonl(
         NAV_HISTORY_KEY,
         {"date": today, "equity": account["equity"], "cash": account["cash"]},
+        unique_key="date",
     )
 
     lines = [

@@ -155,15 +155,48 @@ class WheelState:
             content_type="application/json",
         )
 
-    def append_jsonl(self, key: str, record: dict) -> None:
+    def append_jsonl(self, key: str, record: dict, unique_key: str | None = None) -> None:
         """Read-modify-write append.
 
         R2 has no native append. The blobs here are one short row per trading
         day, so a full round trip is cheap and keeps the file human-readable.
         A read that fails is NOT treated as "file is empty" — that would
         silently truncate NAV history — it raises and the caller degrades loudly.
+
+        `unique_key` names a field that identifies the row rather than the
+        event. When the file already holds a row with the same value, that row
+        is replaced in place and the newest reading wins. nav_history has
+        claimed "one row per session date" since the migration and nothing
+        enforced it: two runs on 2026-08-29 left two rows for that date, and
+        anything computing a per-row return counted the day twice. Order is
+        the series, so a replaced row keeps its position.
+
+        A line that will not parse is somebody's data and survives the rewrite
+        untouched. A record missing the field cannot replace anything, so it
+        appends — never dropped.
         """
         existing = self.get_bytes(key) or b""
+        if unique_key is not None and (target := record.get(unique_key)) is not None:
+            kept, replaced = [], False
+            for line in existing.decode().splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    kept.append(line)
+                    continue
+                if isinstance(row, dict) and row.get(unique_key) == target:
+                    kept.append(json.dumps(record))
+                    replaced = True
+                else:
+                    kept.append(line)
+            if not replaced:
+                kept.append(json.dumps(record))
+            blob = ("\n".join(kept) + "\n").encode()
+            self.put_bytes(key, blob, content_type="application/x-ndjson")
+            return
+
         if existing and not existing.endswith(b"\n"):
             existing += b"\n"
         blob = existing + (json.dumps(record) + "\n").encode()
