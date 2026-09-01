@@ -124,7 +124,14 @@ def build_wheel_block(log_path, today):
         return {"recorded": False, "entered": False,
                 "reason": f"strategy log stale (last entry {stamp or 'undated'}) — wheel decision not recorded"}
 
-    sold = last.get("sold_puts") or []
+    # log_sold_puts appends a LIST of dicts per call (core/execution.py), so
+    # entries arrive nested — flatten, accepting bare dicts too.
+    sold = []
+    for item in last.get("sold_puts") or []:
+        if isinstance(item, list):
+            sold.extend(s for s in item if isinstance(s, dict))
+        elif isinstance(item, dict):
+            sold.append(item)
     scan = last.get("put_scan") or {}
     cap_skips = last.get("cap_skips") or []
     candidates = last.get("put_options") or []

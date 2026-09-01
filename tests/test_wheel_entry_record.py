@@ -124,6 +124,28 @@ class WheelBlock(unittest.TestCase):
         self.assertFalse(block["entered"])
         self.assertIn("per-name cap", block["reason"])
 
+    def test_sold_puts_arrive_nested_one_list_per_log_call(self):
+        """log_sold_puts appends [p.to_dict()] per call — the live 2026-09-01
+        run crashed on exactly this shape (AttributeError: 'list' object has
+        no attribute 'get') AFTER selling the book's first CSPs."""
+        import tempfile
+        entry = {
+            "datetime": "2026-09-01T10:46:00-04:00",
+            "allowed_symbols": ["XOM", "UBER"],
+            "buying_power": 80000.0,
+            "put_scan": {"scanned": 200, "rejections": {}},
+            "put_options": [{"symbol": "XOM261016P00155000"}],
+            "sold_puts": [[{"symbol": "XOM261016P00155000"}],
+                          [{"symbol": "UBER261016P00070000"}]],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._write_log(tmp, entry)
+            block = run_daily.build_wheel_block(p, today="2026-09-01")
+        self.assertTrue(block["entered"])
+        self.assertIn("XOM261016P00155000", block["reason"])
+        self.assertIn("UBER261016P00070000", block["reason"])
+        self.assertEqual(len(block["sold"]), 2)
+
     def test_a_fill_is_recorded_as_entered(self):
         import tempfile
         entry = {
