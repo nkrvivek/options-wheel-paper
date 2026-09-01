@@ -21,8 +21,14 @@ def sell_puts(client, allowed_symbols, buying_power, strat_logger = None):
         return
     option_contracts = client.get_options_contracts(filtered_symbols, 'put')
     snapshots = client.get_option_snapshot([c.symbol for c in option_contracts])
-    put_options = filter_options([Contract.from_contract_snapshot(contract, snapshots.get(contract.symbol, None)) for contract in option_contracts if snapshots.get(contract.symbol, None)])
+    contracts = [Contract.from_contract_snapshot(contract, snapshots.get(contract.symbol, None)) for contract in option_contracts if snapshots.get(contract.symbol, None)]
+    rejections = {}
+    no_snapshot = len(option_contracts) - len(contracts)
+    if no_snapshot:
+        rejections["no_snapshot"] = no_snapshot
+    put_options = filter_options(contracts, rejections=rejections)
     if strat_logger:
+        strat_logger.log_put_scan(len(option_contracts), rejections)
         strat_logger.log_put_options([p.to_dict() for p in put_options])
     
     if put_options:
@@ -34,6 +40,8 @@ def sell_puts(client, allowed_symbols, buying_power, strat_logger = None):
             # name, keep scanning — a too-big strike is not exhaustion.
             if 100 * p.strike > PER_NAME_CAP:
                 logger.info(f"Skipping {p.symbol}: collateral {100 * p.strike:.0f} exceeds PER_NAME_CAP {PER_NAME_CAP}")
+                if strat_logger:
+                    strat_logger.log_cap_skip({"symbol": p.symbol, "collateral": 100 * p.strike})
                 continue
             buying_power -= 100 * p.strike
             if buying_power < 0:

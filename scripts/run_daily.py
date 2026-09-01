@@ -104,6 +104,66 @@ def build_earnings_exclusions(symbols):
     return excluded, "; ".join(reasons) if reasons else "none"
 
 
+def build_wheel_block(log_path, today):
+    """Wheel-sleeve entry record for daily_state — mirrors spread['entry'].
+
+    The spread sleeve has said WHY it stood aside since day one; the wheel
+    logged that only to a dev-only strategy log that never left the container
+    (measured 2026-09-01: five attended sessions, zero entries, no recorded
+    reason). This reads the run's strategy log and records the decision.
+    A log that is missing, unparseable, or from another day is named as
+    unrecorded — never read as "no candidates"."""
+    try:
+        data = json.loads(Path(log_path).read_text())
+        last = data[-1] if isinstance(data, list) and data else {}
+    except (OSError, ValueError):
+        return {"recorded": False, "entered": False,
+                "reason": "strategy log unreadable — wheel decision not recorded"}
+    stamp = str(last.get("datetime", ""))
+    if not stamp.startswith(today):
+        return {"recorded": False, "entered": False,
+                "reason": f"strategy log stale (last entry {stamp or 'undated'}) — wheel decision not recorded"}
+
+    sold = last.get("sold_puts") or []
+    scan = last.get("put_scan") or {}
+    cap_skips = last.get("cap_skips") or []
+    candidates = last.get("put_options") or []
+    allowed = last.get("allowed_symbols")
+    buying_power = last.get("buying_power")
+
+    if sold:
+        reason = f"sold {len(sold)}: " + ", ".join(s.get("symbol", "?") for s in sold)
+    elif allowed is not None and not allowed:
+        reason = "no allowed symbols (all held or earnings-excluded)"
+    elif isinstance(buying_power, (int, float)) and buying_power <= 0:
+        reason = f"no buying power (${buying_power:,.0f})"
+    elif not candidates:
+        rej = scan.get("rejections") or {}
+        detail = ", ".join(f"{count} {gate}" for gate, count in
+                           sorted(rej.items(), key=lambda kv: -kv[1]))
+        reason = (f"0 of {scan.get('scanned', '?')} contracts passed filters"
+                  + (f": {detail}" if detail else ""))
+    elif cap_skips:
+        skips = ", ".join(f"{s.get('symbol', '?')} (${s.get('collateral', 0):,.0f})"
+                          for s in cap_skips)
+        reason = f"{len(candidates)} candidate(s), none placed — over per-name cap: {skips}"
+    else:
+        reason = f"{len(candidates)} candidate(s), none placed"
+
+    return {
+        "recorded": True,
+        "entered": bool(sold),
+        "reason": reason,
+        "allowed_symbols": allowed,
+        "buying_power": buying_power,
+        "scanned": scan.get("scanned"),
+        "rejections": scan.get("rejections"),
+        "cap_skips": cap_skips,
+        "candidates": len(candidates),
+        "sold": [s.get("symbol") for s in sold],
+    }
+
+
 def run_strategy():
     env = {**os.environ, "PYTHONPATH": str(ROOT)}
     proc = subprocess.run(
@@ -208,6 +268,7 @@ def main():
     (ROOT / "config" / "earnings_exclude.txt").write_text("\n".join(sorted(excluded)) + "\n")
 
     rc, output = run_strategy()
+    wheel = build_wheel_block(ROOT / "logs" / "strategy_log.json", today)
 
     from config.credentials import ALPACA_API_KEY, ALPACA_SECRET_KEY, IS_PAPER
     from core.broker_client import BrokerClient
@@ -250,6 +311,7 @@ def main():
         "excluded": sorted(excluded),
         "exclusion_detail": exclusion_detail,
         "universe": symbols,
+        "wheel": wheel,
         "spread": spread,
     }
     # R2 primary, local ./state/ fallback for dev. The pre-migration workflow
@@ -273,6 +335,7 @@ def main():
     if breaches:
         lines.append("BREACHES (kill criterion):")
         lines.extend(f"  {b}" for b in breaches)
+    lines.append(f"wheel sleeve: entry: {'yes' if wheel.get('entered') else 'no'} — {wheel.get('reason')}")
     lines.extend(spread_digest_lines(spread))
     if excluded:
         lines.append(f"earnings-excluded: {sorted(excluded)}")

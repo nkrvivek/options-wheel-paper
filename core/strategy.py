@@ -21,21 +21,44 @@ def filter_underlying(client, symbols, buying_power_limit):
 
     return filtered_symbols
 
-def filter_options(options, min_strike = 0):
+def _first_failing_gate(contract, min_strike):
+    """Name of the first gate this contract fails, or None if it passes.
+
+    Gate order matches the original filter expression so the counts read the
+    way the filter actually short-circuits."""
+    if not contract.delta:
+        return "no_delta"
+    if not (DELTA_MIN < abs(contract.delta) < DELTA_MAX):
+        return "delta_band"
+    if not contract.bid_price:
+        return "no_quote"
+    annualized_yield = (contract.bid_price / contract.strike) * (365 / (contract.dte + 1))
+    if not (YIELD_MIN < annualized_yield < YIELD_MAX):
+        return "yield_band"
+    if not contract.oi or contract.oi <= OPEN_INTEREST_MIN:
+        return "low_oi"
+    if not spread_ok(contract):
+        return "wide_spread"
+    if contract.strike < min_strike:
+        return "below_min_strike"
+    return None
+
+
+def filter_options(options, min_strike = 0, rejections = None):
     """
     Filter put options based on delta and open interest.
+
+    When `rejections` (a dict) is passed, each rejected contract counts its
+    first failing gate into it — the wheel's answer to "why did nothing
+    sell today", which for five sessions had no recorded answer at all.
     """
-    filtered_contracts = [contract for contract in options 
-                          if contract.delta 
-                          and abs(contract.delta) > DELTA_MIN 
-                          and abs(contract.delta) < DELTA_MAX
-                          and (contract.bid_price / contract.strike) * (365 / (contract.dte + 1)) > YIELD_MIN
-                          and (contract.bid_price / contract.strike) * (365 / (contract.dte + 1)) < YIELD_MAX
-                          and contract.oi
-                          and contract.oi > OPEN_INTEREST_MIN
-                          and spread_ok(contract)
-                          and contract.strike >= min_strike]
-    
+    filtered_contracts = []
+    for contract in options:
+        reason = _first_failing_gate(contract, min_strike)
+        if reason is None:
+            filtered_contracts.append(contract)
+        elif rejections is not None:
+            rejections[reason] = rejections.get(reason, 0) + 1
     return filtered_contracts
 
 def score_options(options):

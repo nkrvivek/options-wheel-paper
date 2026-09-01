@@ -57,6 +57,14 @@ class StrategyLogger:
         if self.enabled:
             self.log_entry["put_options"] = put_options
 
+    def log_put_scan(self, scanned: int, rejections: dict):
+        if self.enabled:
+            self.log_entry["put_scan"] = {"scanned": scanned, "rejections": rejections}
+
+    def log_cap_skip(self, skip: dict):
+        if self.enabled:
+            self.log_entry.setdefault("cap_skips", []).append(skip)
+
     def log_sold_calls(self, call_dict: dict):
         if self.enabled:
             if self.log_entry.get("sold_calls") is None:
