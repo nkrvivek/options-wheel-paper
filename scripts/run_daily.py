@@ -245,6 +245,17 @@ def check_breaches(account, positions):
     return breaches
 
 
+def should_send_digest(status: str) -> bool:
+    """Whether a day's result is worth a mail.
+
+    A GREEN day restated daily_state.json and nav_history.jsonl, both of which
+    the session opener already reads off R2. Only a day with something to act
+    on mails now. Anything that is not recognisably GREEN mails: an unknown
+    status is not a licence to go quiet.
+    """
+    return status != "GREEN"
+
+
 def send_digest(subject, body):
     key, frm, to = os.getenv("RESEND_API_KEY"), os.getenv("RESEND_FROM"), os.getenv("RESEND_TO")
     if not (key and frm and to):
@@ -350,7 +361,10 @@ def main():
     if rc != 0:
         lines.append(f"strategy run FAILED (rc {rc}):")
         lines.append(output[-1500:])
-    send_digest(f"[paper-wheel] {today} {status} — equity ${account['equity']:,.0f}", "\n".join(lines))
+    # The two state writes above are deliberately not on this switch, so a
+    # quiet day still leaves the opener something to read.
+    if should_send_digest(status):
+        send_digest(f"[paper-wheel] {today} {status} — equity ${account['equity']:,.0f}", "\n".join(lines))
     print(json.dumps({k: state[k] for k in ("date", "status", "equity", "breaches", "excluded")}, indent=1))
     return 0 if status != "RED" else 1
 

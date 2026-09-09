@@ -55,3 +55,30 @@ class SendDigestNamesItself(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_a_green_day_writes_state_and_sends_no_mail():
+    """The opener already reads daily_state.json and nav_history.jsonl off R2.
+
+    A GREEN day's mail restated those two files and carried no decision, so it
+    was the third copy of a number nobody acted on. The state write is NOT on
+    this switch: if a quiet day also stopped writing, quiet would stop meaning
+    "nothing to act on" and start meaning "did not run".
+    """
+    from scripts.run_daily import should_send_digest
+
+    assert should_send_digest("GREEN") is False
+
+
+def test_yellow_and_red_days_still_mail():
+    from scripts.run_daily import should_send_digest
+
+    assert should_send_digest("YELLOW") is True, "every name earnings-excluded is a finding"
+    assert should_send_digest("RED") is True, "a breach or a failed run must never go quiet"
+
+
+def test_an_unknown_status_mails_rather_than_going_quiet():
+    from scripts.run_daily import should_send_digest
+
+    assert should_send_digest("") is True
+    assert should_send_digest("PURPLE") is True
