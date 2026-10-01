@@ -3,6 +3,10 @@ from core.broker_client import BrokerClient
 from core.execution import sell_puts, sell_calls
 from core.early_exit import manage_short_puts
 from core.state_manager import update_state, calculate_risk, wheel_positions
+from core.trade_ledger import over_hold_cap
+from core.r2_state import OPEN_SINCE_KEY, get_state_store
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from config.credentials import ALPACA_API_KEY, ALPACA_SECRET_KEY, IS_PAPER
 from config.params import MAX_RISK
 from wheel_logging.strategy_logger import StrategyLogger
@@ -55,7 +59,15 @@ def main():
         states = update_state(positions)
         strat_logger.add_state_dict(states)
 
+        # DJ-20261001-03: shares held past SHARE_HOLD_MAX_DAYS are sold, not
+        # covered again. run_daily records the first day each position was seen.
+        open_since = get_state_store().read_json(OPEN_SINCE_KEY, default={}) or {}
+        today = datetime.now(ZoneInfo("America/New_York")).date()
         for symbol, state in states.items():
+            if state["type"] == "long_shares" and over_hold_cap(open_since.get(symbol), today):
+                print(f"hold cap: selling {state['qty']} {symbol}, held since {open_since[symbol]}")
+                client.market_sell(symbol, state["qty"])
+                continue
             if state["type"] == "long_shares":
                 # A covered call is also a new short leg — the earnings rule
                 # applies to it the same as to a CSP.

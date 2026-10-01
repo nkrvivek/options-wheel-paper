@@ -46,6 +46,9 @@ DAILY_STATE_KEY = "state/daily_state.json"
 NAV_HISTORY_KEY = "state/nav_history.jsonl"
 SPREAD_BOOK_KEY = "state/spread_book.json"
 LAST_RUN_KEY = "state/last_run.json"
+# DJ-20261001-03: first day each wheel position was seen, and closed trades.
+OPEN_SINCE_KEY = "state/open_since.json"
+WHEEL_TRADES_KEY = "state/wheel_trades.jsonl"
 
 DEFAULT_BUCKET = "options-wheel-state"
 

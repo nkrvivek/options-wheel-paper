@@ -54,3 +54,10 @@ SECTORS = {
 # Fixed until a review on 2026-12-31; the spy-spread sleeve keeps its own rules.
 PUT_PROFIT_TAKE = 0.50
 PUT_TIME_EXIT = 0.63
+
+# DJ-20261001-03 (joincfu performance page: losers held 520-598 days): the
+# wheel sells assigned shares once they have been held SHARE_HOLD_MAX_DAYS.
+# No new covered call is written past the cap; shares still under a call wait
+# for it to expire or be assigned, so the worst case is the cap plus one call
+# (about 135 days). Enforced in scripts/run_strategy.py via core.trade_ledger.
+SHARE_HOLD_MAX_DAYS = 90

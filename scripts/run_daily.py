@@ -24,9 +24,12 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from config.params import EXPIRATION_MAX  # noqa: E402
+from core.trade_ledger import stats_line  # noqa: E402
 from core.r2_state import (  # noqa: E402
     DAILY_STATE_KEY,
     NAV_HISTORY_KEY,
+    OPEN_SINCE_KEY,
+    WHEEL_TRADES_KEY,
     get_state_store,
 )
 
@@ -169,6 +172,28 @@ def build_wheel_block(log_path, today):
         "candidates": len(candidates),
         "sold": [s.get("symbol") for s in sold],
     }
+
+
+def record_closed_trades(store, client, positions, today):
+    """DJ-20261001-03: diff yesterday's positions against today's, append the
+    closes to the trade ledger, refresh first-seen dates, and return stats
+    over every closed wheel trade. Runs before today's daily_state overwrites
+    yesterday's. A failure here is reported in the stats, never raised: the
+    digest must still go out."""
+    from core.trade_ledger import diff_closes, stats, update_open_since, broker_fill_price
+    try:
+        prev = store.read_json(DAILY_STATE_KEY, default={}) or {}
+        if prev.get("date") and prev["date"] != today:
+            since = datetime.fromisoformat(prev["date"]).date()
+            closes = diff_closes(prev.get("positions") or [], positions,
+                                 broker_fill_price(client, since), today)
+            for t in closes:
+                store.append_jsonl(WHEEL_TRADES_KEY, t, unique_key="id")
+        open_since = store.read_json(OPEN_SINCE_KEY, default={}) or {}
+        store.write_json(OPEN_SINCE_KEY, update_open_since(open_since, positions, today))
+        return stats(store.read_jsonl(WHEEL_TRADES_KEY))
+    except Exception as e:
+        return {"closed": 0, "unresolved": 0, "error": f"{e.__class__.__name__}: {e}"}
 
 
 def run_strategy():
@@ -336,6 +361,8 @@ def main():
     # wrote these two files and then `git commit`ed them; nothing commits
     # state any more.
     store = get_state_store()
+    trade_stats = record_closed_trades(store, client, positions, today)
+    state["wheel_trades"] = trade_stats
     store.write_json(DAILY_STATE_KEY, state)
     store.append_jsonl(
         NAV_HISTORY_KEY,
@@ -353,6 +380,7 @@ def main():
     if breaches:
         lines.append("BREACHES (kill criterion):")
         lines.extend(f"  {b}" for b in breaches)
+    lines.append(stats_line(trade_stats))
     lines.append(f"wheel sleeve: entry: {'yes' if wheel.get('entered') else 'no'} — {wheel.get('reason')}")
     lines.extend(spread_digest_lines(spread))
     if excluded:
