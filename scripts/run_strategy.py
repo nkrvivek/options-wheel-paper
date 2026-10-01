@@ -1,6 +1,7 @@
 from pathlib import Path
 from core.broker_client import BrokerClient
 from core.execution import sell_puts, sell_calls
+from core.early_exit import manage_short_puts
 from core.state_manager import update_state, calculate_risk, wheel_positions
 from config.credentials import ALPACA_API_KEY, ALPACA_SECRET_KEY, IS_PAPER
 from config.params import MAX_RISK
@@ -42,6 +43,11 @@ def main():
         buying_power = MAX_RISK
     else:
         positions = wheel_positions(client.get_positions())
+        # DJ-20261001-01: buy back puts at 50% kept or 63% of span. A put with a
+        # pending close stays in `positions`, so its name is not re-sold today.
+        early_closes = manage_short_puts(client, positions)
+        for c in early_closes:
+            print(f"early exit: {c['symbol']} {c['reason']} credit {c['credit']:.2f} limit {c['limit']:.2f}")
         strat_logger.add_current_positions(positions)
 
         current_risk = calculate_risk(positions)

@@ -46,3 +46,11 @@ SECTORS = {
     "NKE": "discretionary",
     "BA": "industrials",
 }
+
+# DJ-20261001-01 (joincfu "close early vs let it run"): a wheel short put is
+# bought back once PUT_PROFIT_TAKE of its credit is kept, or once PUT_TIME_EXIT
+# of the entry-to-expiry span has passed, whichever comes first. Covered calls
+# are left to run to expiry (the article's ~96%). Enforced in core.early_exit.
+# Fixed until a review on 2026-12-31; the spy-spread sleeve keeps its own rules.
+PUT_PROFIT_TAKE = 0.50
+PUT_TIME_EXIT = 0.63
