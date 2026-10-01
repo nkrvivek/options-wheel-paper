@@ -196,6 +196,15 @@ def record_closed_trades(store, client, positions, today):
         return {"closed": 0, "unresolved": 0, "error": f"{e.__class__.__name__}: {e}"}
 
 
+RULE_ACTION_PREFIXES = ("early exit:", "hold cap:")
+
+
+def rule_actions(output):
+    """Early exits and hold-cap sales run_strategy printed, so daily_state keeps them."""
+    return [ln.strip() for ln in (output or "").splitlines()
+            if ln.strip().startswith(RULE_ACTION_PREFIXES)]
+
+
 def run_strategy():
     env = {**os.environ, "PYTHONPATH": str(ROOT)}
     proc = subprocess.run(
@@ -355,6 +364,7 @@ def main():
         "exclusion_detail": exclusion_detail,
         "universe": symbols,
         "wheel": wheel,
+        "actions": rule_actions(output),
         "spread": spread,
     }
     # R2 primary, local ./state/ fallback for dev. The pre-migration workflow
