@@ -1,7 +1,7 @@
 from pathlib import Path
 from core.broker_client import BrokerClient
 from core.execution import sell_puts, sell_calls
-from core.state_manager import update_state, calculate_risk
+from core.state_manager import update_state, calculate_risk, wheel_positions
 from config.credentials import ALPACA_API_KEY, ALPACA_SECRET_KEY, IS_PAPER
 from config.params import MAX_RISK
 from wheel_logging.strategy_logger import StrategyLogger
@@ -41,7 +41,7 @@ def main():
         allowed_symbols = SYMBOLS
         buying_power = MAX_RISK
     else:
-        positions = client.get_positions()
+        positions = wheel_positions(client.get_positions())
         strat_logger.add_current_positions(positions)
 
         current_risk = calculate_risk(positions)
@@ -65,7 +65,8 @@ def main():
     strat_logger.set_allowed_symbols(allowed_symbols)
 
     logger.info(f"Current buying power is ${buying_power}")
-    sell_puts(client, allowed_symbols, buying_power, strat_logger)
+    held = [] if args.fresh_start else list(states.keys())
+    sell_puts(client, allowed_symbols, buying_power, strat_logger, held_symbols=held)
 
     strat_logger.save()    
 

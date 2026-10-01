@@ -29,3 +29,20 @@ PER_NAME_CAP = 20_000
 # Wider than this and a paper fill flatters the book. Enforced in
 # core.strategy.filter_options.
 SPREAD_MAX_FRAC = 0.10
+
+# 2026-10-01: universe widened from 8 names to 26 (all priced so one contract
+# fits PER_NAME_CAP). At most SECTOR_CAP names per sector, counting names
+# already held. A name with no entry here is refused, never waved in.
+SECTOR_CAP = 2
+SECTORS = {
+    "XOM": "energy", "KMI": "energy",
+    "MRK": "health", "PFE": "health",
+    "WMT": "staples", "KO": "staples", "PEP": "staples", "KVUE": "staples",
+    "SCHW": "financials", "BAC": "financials", "C": "financials",
+    "WFC": "financials", "PYPL": "financials",
+    "CSCO": "tech", "ORCL": "tech", "INTC": "tech", "PLTR": "tech",
+    "NFLX": "comms", "DIS": "comms", "T": "comms", "VZ": "comms",
+    "UBER": "discretionary", "SBUX": "discretionary", "GM": "discretionary",
+    "NKE": "discretionary",
+    "BA": "industrials",
+}

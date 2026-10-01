@@ -389,3 +389,41 @@ class TestRunSleeve(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FetchRegimeCeiling(unittest.TestCase):
+    """The sleeve runs at 10:45 ET; the mq scan lands ~15:15 ET the day
+    before. Without its own ceiling the worker's 6h default made every read
+    STALE and blocked every entry from 2026-08-27 to 2026-10-01."""
+
+    def test_request_names_the_sleeve_ceiling(self):
+        from unittest import mock
+        seen = {}
+
+        class Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return b'{"tier": "clear", "vix": 17}'
+
+        def fake_urlopen(req, timeout):
+            seen["url"] = req.full_url
+            return Resp()
+
+        env = {"TR_WORKER_URL": "https://w", "TR_WORKER_TOKEN": "t"}
+        with mock.patch.dict("os.environ", env), \
+                mock.patch.object(ss.urllib.request, "urlopen", fake_urlopen):
+            self.assertEqual(ss.fetch_regime()["tier"], "clear")
+        self.assertIn(f"max_age_min={ss.REGIME_MAX_AGE_MIN}", seen["url"])
+
+    def test_ceiling_covers_overnight_not_a_weekend(self):
+        self.assertGreaterEqual(ss.REGIME_MAX_AGE_MIN, 20 * 60)
+        self.assertLess(ss.REGIME_MAX_AGE_MIN, 40 * 60)
+
+
+if __name__ == "__main__":
+    unittest.main()

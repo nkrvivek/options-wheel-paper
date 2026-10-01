@@ -88,3 +88,26 @@ def select_options(options, scores, n=None):
 
     # Return top n (or all if n not specified)
     return [option for option, _ in sorted_best[:n]] if n else [option for option, _ in sorted_best]
+
+
+def apply_sector_cap(options, held, cap=None):
+    """Drop options that would put more than `cap` names in one sector.
+
+    `held` names count first. Order is kept, so the best-scored name in a
+    sector wins. A name with no sector is refused.
+    """
+    from config.params import SECTORS, SECTOR_CAP
+    cap = SECTOR_CAP if cap is None else cap
+    counts = {}
+    for sym in held:
+        sector = SECTORS.get(sym)
+        if sector:
+            counts[sector] = counts.get(sector, 0) + 1
+    kept = []
+    for o in options:
+        sector = SECTORS.get(o.underlying)
+        if sector is None or counts.get(sector, 0) >= cap:
+            continue
+        counts[sector] = counts.get(sector, 0) + 1
+        kept.append(o)
+    return kept

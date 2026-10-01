@@ -1,12 +1,12 @@
 import logging
-from .strategy import filter_underlying, filter_options, score_options, select_options
+from .strategy import filter_underlying, filter_options, score_options, select_options, apply_sector_cap
 from config.params import PER_NAME_CAP
 from models.contract import Contract
 import numpy as np
 
 logger = logging.getLogger(f"strategy.{__name__}")
 
-def sell_puts(client, allowed_symbols, buying_power, strat_logger = None):
+def sell_puts(client, allowed_symbols, buying_power, strat_logger = None, held_symbols = ()):
     """
     Scan allowed symbols and sell short puts up to the buying power limit.
     """
@@ -35,6 +35,7 @@ def sell_puts(client, allowed_symbols, buying_power, strat_logger = None):
         logger.info("Scoring put options...")
         scores = score_options(put_options)
         put_options = select_options(put_options, scores)
+        put_options = apply_sector_cap(put_options, held_symbols)
         for p in put_options:
             # paper-wheel prereg 2026-08-25: per-name collateral cap. Skip the
             # name, keep scanning — a too-big strike is not exhaustion.

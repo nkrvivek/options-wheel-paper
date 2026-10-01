@@ -198,6 +198,14 @@ def kill_check(book, unrealized_pnl):
 
 # ------------------------------------------------------------- broker wiring
 
+# The sleeve runs at 10:45 ET and the mq scan lands ~15:15 ET the previous
+# day (~19.5h old). The worker's 6h default made every read STALE, so the
+# sleeve asks for 26h: yesterday's scan passes, a weekend-old one does not
+# (Mondays and post-holiday mornings still block). Freshness wiring, not a
+# preregistered number. Fixed 2026-10-01.
+REGIME_MAX_AGE_MIN = 26 * 60
+
+
 def fetch_regime():
     """GET the trade-refresh worker's /regime. Any failure -> None (blocks)."""
     url, token = os.getenv("TR_WORKER_URL"), os.getenv("TR_WORKER_TOKEN")
@@ -205,7 +213,7 @@ def fetch_regime():
         return None
     try:
         req = urllib.request.Request(
-            f"{url}/regime?token={token}",
+            f"{url}/regime?token={token}&max_age_min={REGIME_MAX_AGE_MIN}",
             headers={"User-Agent": "paper-wheel/1.0"},
         )
         with urllib.request.urlopen(req, timeout=30) as r:

@@ -1,6 +1,21 @@
 from .utils import parse_option_symbol
 from alpaca.trading.enums import AssetClass
 
+def wheel_positions(positions):
+    """Positions the wheel owns. The spy-spread sleeve trades SPY in this same
+    account; its legs (one of them long) are not the wheel's to manage."""
+    from config.spread_params import UNDERLYING
+    out = []
+    for p in positions:
+        if p.asset_class == AssetClass.US_OPTION:
+            underlying, _, _ = parse_option_symbol(p.symbol)
+        else:
+            underlying = p.symbol
+        if underlying != UNDERLYING:
+            out.append(p)
+    return out
+
+
 def calculate_risk(positions):
     risk = 0
     for p in positions:
