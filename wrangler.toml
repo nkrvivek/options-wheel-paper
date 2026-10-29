@@ -31,7 +31,9 @@ CONTAINER_R2_BUCKET = "options-wheel-state"
 [triggers]
 # 14:45 UTC Mon-Fri = 10:45 ET — the exact minute the retired
 # options-wheel-dispatch worker used, so cadence is unchanged by the migration.
-crons = ["45 14 * * 2-6"]
+# RETIRED 2026-10-28 (DJ-20261028-04; user "1. Yes, retire"): -0.6% since 8/26 vs SPY +0.7%.
+# The Worker and the options-wheel-state bucket stay so history remains readable.
+crons = []
 
 [[r2_buckets]]
 binding = "WHEEL_STATE"
